@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<GeneratedContent[]>([]);
   const [view, setView] = useState<'generator' | 'dashboard'>('generator');
   const [isEditingInStudio, setIsEditingInStudio] = useState<boolean>(false);
+  const [isEditorProcessing, setIsEditorProcessing] = useState<boolean>(false);
   
   // Config States
   const [mode, setMode] = useState<AppMode>(AppMode.TextToImage);
@@ -156,6 +157,21 @@ const App: React.FC = () => {
     closeStudio();
   };
 
+  // Handle AI edits inside the studio (e.g. Remove Background)
+  const handleAiEdit = async (currentImageData: string, magicPrompt: string): Promise<string> => {
+    setIsEditorProcessing(true);
+    try {
+      await checkApiKey();
+      const result = await editImage(currentImageData, magicPrompt);
+      return result.data;
+    } catch (error: any) {
+      console.error("AI Edit Failed", error);
+      throw error;
+    } finally {
+      setIsEditorProcessing(false);
+    }
+  };
+
   // Dashboard Handlers
   const selectFromHistory = (item: GeneratedContent) => {
     setCurrentContent(item.data);
@@ -201,7 +217,9 @@ const App: React.FC = () => {
           <ImageEditor 
             imageData={currentContent} 
             onSave={saveStudioEdit} 
-            onCancel={closeStudio} 
+            onCancel={closeStudio}
+            onAiEdit={handleAiEdit}
+            isProcessing={isEditorProcessing}
           />
         )}
 

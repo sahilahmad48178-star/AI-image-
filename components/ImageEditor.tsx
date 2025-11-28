@@ -1,14 +1,40 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Check, RotateCw, FlipHorizontal, Sun, Contrast, Droplet, Sliders, Undo2 } from 'lucide-react';
+import { 
+  X, Check, RotateCw, FlipHorizontal, Sun, Contrast, Droplet, 
+  Sliders, Undo2, Redo2, Wand2, Crop, Layers, Eraser, Loader2 
+} from 'lucide-react';
 
 interface ImageEditorProps {
   imageData: string; // Base64
   onSave: (newData: string) => void;
   onCancel: () => void;
+  onAiEdit: (currentData: string, prompt: string) => Promise<string>;
+  isProcessing: boolean;
 }
 
-export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onCancel }) => {
+type EditorTab = 'adjust' | 'transform' | 'magic';
+
+interface HistoryState {
+  data: string; // Base64
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  grayscale: number;
+  rotation: number;
+  flipH: boolean;
+}
+
+export const ImageEditor: React.FC<ImageEditorProps> = ({ 
+  imageData, 
+  onSave, 
+  onCancel,
+  onAiEdit,
+  isProcessing
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [activeTab, setActiveTab] = useState<EditorTab>('adjust');
+
+  // Editor State
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
   const [saturation, setSaturation] = useState(100);
@@ -16,7 +42,79 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
   const [rotation, setRotation] = useState(0);
   const [flipH, setFlipH] = useState(false);
   
-  // Load and draw image
+  // Base image data (updated after crop or AI edit)
+  const [currentBaseImage, setCurrentBaseImage] = useState(imageData);
+
+  // History Stack
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Initialize history
+  useEffect(() => {
+    if (history.length === 0) {
+      const initialState: HistoryState = {
+        data: imageData,
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+        grayscale: 0,
+        rotation: 0,
+        flipH: false
+      };
+      setHistory([initialState]);
+      setHistoryIndex(0);
+    }
+  }, []);
+
+  const addToHistory = () => {
+    const newState: HistoryState = {
+      data: currentBaseImage,
+      brightness,
+      contrast,
+      saturation,
+      grayscale,
+      rotation,
+      flipH
+    };
+
+    // If we are in the middle of history, discard future
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newState);
+    
+    // Limit history size to 20
+    if (newHistory.length > 20) newHistory.shift();
+    
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevState = history[historyIndex - 1];
+      setHistoryIndex(historyIndex - 1);
+      restoreState(prevState);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextState = history[historyIndex + 1];
+      setHistoryIndex(historyIndex + 1);
+      restoreState(nextState);
+    }
+  };
+
+  const restoreState = (state: HistoryState) => {
+    setCurrentBaseImage(state.data);
+    setBrightness(state.brightness);
+    setContrast(state.contrast);
+    setSaturation(state.saturation);
+    setGrayscale(state.grayscale);
+    setRotation(state.rotation);
+    setFlipH(state.flipH);
+  };
+
+  // Render Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -24,7 +122,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
     if (!ctx) return;
 
     const img = new Image();
-    img.src = `data:image/png;base64,${imageData}`;
+    img.src = `data:image/png;base64,${currentBaseImage}`;
     img.onload = () => {
       // Handle canvas sizing based on rotation
       if (rotation % 180 !== 0) {
@@ -45,7 +143,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
       if (flipH) ctx.scale(-1, 1);
       
       // Draw image centered
-      // Note: When rotated 90/270, width/height are swapped in context
       if (rotation % 180 !== 0) {
          ctx.drawImage(img, -img.height / 2, -img.width / 2);
       } else {
@@ -54,22 +151,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
 
       ctx.restore();
     };
-  }, [imageData, rotation, flipH]);
+  }, [currentBaseImage, rotation, flipH]);
 
-  // Apply filters via CSS for preview, but we need to apply them to canvas for save
-  // Actually, for saving, we must apply filters to the context before extracting data.
-  // The above effect handles geometry. Let's add a separate effect or function to get the data with filters.
-  
   const getProcessedData = () => {
     const canvas = canvasRef.current;
     if (!canvas) return '';
     
-    // To apply filters for export, we need to redraw with filter property
-    // But since `ctx.filter` is supported, we can just update the drawing logic above
-    // However, React effect dependencies might cause flicker.
-    // Let's rely on CSS for preview performance, and doing a final draw for Save.
-    
-    // Temporary canvas for final render
     const tempCanvas = document.createElement('canvas');
     const ctx = tempCanvas.getContext('2d');
     if (!ctx) return '';
@@ -79,8 +166,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
     
     const filterString = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%)`;
     ctx.filter = filterString;
-    
-    // Draw the current visible canvas onto the temp canvas with filters
     ctx.drawImage(canvas, 0, 0);
     
     return tempCanvas.toDataURL('image/png').split(',')[1];
@@ -91,13 +176,90 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
     onSave(data);
   };
 
-  const handleReset = () => {
-    setBrightness(100);
-    setContrast(100);
-    setSaturation(100);
-    setGrayscale(0);
-    setRotation(0);
-    setFlipH(false);
+  const handleCrop = (aspectRatio: number) => {
+    // Basic crop implementation (center crop)
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const currentWidth = canvas.width;
+    const currentHeight = canvas.height;
+    const currentRatio = currentWidth / currentHeight;
+
+    let cropWidth, cropHeight;
+
+    if (currentRatio > aspectRatio) {
+      // Too wide, crop width
+      cropHeight = currentHeight;
+      cropWidth = currentHeight * aspectRatio;
+    } else {
+      // Too tall, crop height
+      cropWidth = currentWidth;
+      cropHeight = currentWidth / aspectRatio;
+    }
+
+    const startX = (currentWidth - cropWidth) / 2;
+    const startY = (currentHeight - cropHeight) / 2;
+
+    // We need to capture the current state (filters applied) before cropping
+    const dataWithFilters = getProcessedData();
+    
+    // Create a new canvas to perform the crop
+    const img = new Image();
+    img.src = `data:image/png;base64,${dataWithFilters}`;
+    img.onload = () => {
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = cropWidth;
+      cropCanvas.height = cropHeight;
+      const cropCtx = cropCanvas.getContext('2d');
+      if (!cropCtx) return;
+
+      cropCtx.drawImage(
+        img, 
+        startX, startY, cropWidth, cropHeight, 
+        0, 0, cropWidth, cropHeight
+      );
+
+      const croppedData = cropCanvas.toDataURL('image/png').split(',')[1];
+      
+      // Reset transforms since they are "baked" into the cropped image
+      setCurrentBaseImage(croppedData);
+      setRotation(0);
+      setFlipH(false);
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setGrayscale(0);
+      
+      // Update history next tick
+      setTimeout(addToHistory, 50);
+    };
+  };
+
+  const handleMagicRemoveBg = async () => {
+    // Bake current state before sending to AI
+    const bakedImage = getProcessedData();
+    
+    try {
+      const newImageData = await onAiEdit(bakedImage, "Remove the background and replace it with a solid white background. Isolate the main subject.");
+      
+      // Reset params for the new image
+      setCurrentBaseImage(newImageData);
+      setRotation(0);
+      setFlipH(false);
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setGrayscale(0);
+      
+      setTimeout(addToHistory, 50);
+    } catch (e) {
+      console.error("BG Remove failed");
+    }
+  };
+
+  // Track slider changes for history
+  const handleSliderChangeEnd = () => {
+    addToHistory();
   };
 
   const filterStyle = {
@@ -105,106 +267,222 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ imageData, onSave, onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/95 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-5xl h-[85vh] bg-slate-800 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl border border-slate-700">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-6xl h-[90vh] bg-slate-900 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl border border-slate-800">
         
         {/* Preview Area */}
-        <div className="flex-1 bg-slate-900/50 relative overflow-hidden flex items-center justify-center p-8">
+        <div className="flex-1 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-slate-950 relative overflow-hidden flex items-center justify-center p-8 group">
+           
+           {isProcessing && (
+             <div className="absolute inset-0 z-20 bg-slate-950/80 flex flex-col items-center justify-center backdrop-blur-sm">
+                <Loader2 size={48} className="text-indigo-500 animate-spin mb-4" />
+                <p className="text-indigo-400 font-bold animate-pulse">Applying Magic...</p>
+             </div>
+           )}
+
            <canvas 
              ref={canvasRef} 
              className="max-w-full max-h-full object-contain shadow-2xl transition-all duration-200"
              style={filterStyle}
            />
+           
+           {/* Top Bar controls */}
+           <div className="absolute top-4 left-4 right-4 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-2 bg-slate-800/80 p-1 rounded-lg backdrop-blur">
+                <button 
+                  onClick={handleUndo} 
+                  disabled={historyIndex <= 0}
+                  className="p-2 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:text-slate-300"
+                  title="Undo"
+                >
+                  <Undo2 size={20} />
+                </button>
+                <button 
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1} 
+                  className="p-2 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:text-slate-300"
+                  title="Redo"
+                >
+                  <Redo2 size={20} />
+                </button>
+              </div>
+           </div>
         </div>
 
         {/* Controls Sidebar */}
-        <div className="w-full md:w-80 bg-slate-800 p-6 flex flex-col border-l border-slate-700 overflow-y-auto">
-          <div className="flex items-center justify-between mb-8">
+        <div className="w-full md:w-80 bg-slate-900 p-0 flex flex-col border-l border-slate-800 overflow-y-auto">
+          
+          {/* Header */}
+          <div className="p-6 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-white font-bold text-xl flex items-center gap-2">
-              <Sliders size={20} className="text-indigo-400" /> Studio
+              <Sliders size={20} className="text-indigo-500" /> Studio
             </h3>
-            <button 
-              onClick={handleReset}
-              className="text-slate-400 hover:text-white text-xs uppercase font-bold tracking-wider flex items-center gap-1 transition-colors"
-            >
-              <Undo2 size={12} /> Reset
-            </button>
+            <div className="text-xs text-slate-500 font-mono">
+               {historyIndex + 1}/{history.length}
+            </div>
           </div>
 
-          <div className="space-y-6 flex-1">
-            {/* Filters */}
-            <div className="space-y-4">
-              <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                <Sun size={14} /> Brightness ({brightness}%)
-              </label>
-              <input 
-                type="range" min="0" max="200" value={brightness} 
-                onChange={(e) => setBrightness(Number(e.target.value))}
-                className="w-full accent-indigo-500 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
+          {/* Tabs */}
+          <div className="flex border-b border-slate-800">
+             <button 
+               onClick={() => setActiveTab('adjust')}
+               className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex flex-col items-center gap-1 border-b-2 transition-colors ${activeTab === 'adjust' ? 'border-indigo-500 text-white bg-slate-800' : 'border-transparent text-slate-500 hover:bg-slate-800/50'}`}
+             >
+               <Sliders size={16} /> Adjust
+             </button>
+             <button 
+               onClick={() => setActiveTab('transform')}
+               className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex flex-col items-center gap-1 border-b-2 transition-colors ${activeTab === 'transform' ? 'border-indigo-500 text-white bg-slate-800' : 'border-transparent text-slate-500 hover:bg-slate-800/50'}`}
+             >
+               <Crop size={16} /> Transform
+             </button>
+             <button 
+               onClick={() => setActiveTab('magic')}
+               className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex flex-col items-center gap-1 border-b-2 transition-colors ${activeTab === 'magic' ? 'border-indigo-500 text-white bg-slate-800' : 'border-transparent text-slate-500 hover:bg-slate-800/50'}`}
+             >
+               <Wand2 size={16} /> Magic
+             </button>
+          </div>
 
-            <div className="space-y-4">
-              <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                <Contrast size={14} /> Contrast ({contrast}%)
-              </label>
-              <input 
-                type="range" min="0" max="200" value={contrast} 
-                onChange={(e) => setContrast(Number(e.target.value))}
-                className="w-full accent-indigo-500 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                <Droplet size={14} /> Saturation ({saturation}%)
-              </label>
-              <input 
-                type="range" min="0" max="200" value={saturation} 
-                onChange={(e) => setSaturation(Number(e.target.value))}
-                className="w-full accent-indigo-500 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
+          <div className="p-6 space-y-8 flex-1">
             
-             <div className="space-y-4">
-              <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                <Sliders size={14} /> Grayscale ({grayscale}%)
-              </label>
-              <input 
-                type="range" min="0" max="100" value={grayscale} 
-                onChange={(e) => setGrayscale(Number(e.target.value))}
-                className="w-full accent-indigo-500 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
+            {/* ADJUST TAB */}
+            {activeTab === 'adjust' && (
+              <>
+                <div className="space-y-4">
+                  <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 justify-between">
+                    <span className="flex items-center gap-2"><Sun size={14} /> Brightness</span>
+                    <span className="text-indigo-400">{brightness}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0" max="200" value={brightness} 
+                    onChange={(e) => setBrightness(Number(e.target.value))}
+                    onMouseUp={handleSliderChangeEnd}
+                    onTouchEnd={handleSliderChangeEnd}
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
 
-            {/* Transform */}
-            <div className="pt-6 border-t border-slate-700 grid grid-cols-2 gap-3">
-               <button 
-                 onClick={() => setRotation((r) => r + 90)}
-                 className="flex items-center justify-center gap-2 p-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl transition-colors font-medium text-sm"
-               >
-                 <RotateCw size={16} /> Rotate
-               </button>
-               <button 
-                 onClick={() => setFlipH(!flipH)}
-                 className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-colors font-medium text-sm ${flipH ? 'bg-indigo-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
-               >
-                 <FlipHorizontal size={16} /> Flip
-               </button>
-            </div>
+                <div className="space-y-4">
+                  <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 justify-between">
+                    <span className="flex items-center gap-2"><Contrast size={14} /> Contrast</span>
+                    <span className="text-indigo-400">{contrast}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0" max="200" value={contrast} 
+                    onChange={(e) => setContrast(Number(e.target.value))}
+                    onMouseUp={handleSliderChangeEnd}
+                    onTouchEnd={handleSliderChangeEnd}
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 justify-between">
+                    <span className="flex items-center gap-2"><Droplet size={14} /> Saturation</span>
+                    <span className="text-indigo-400">{saturation}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0" max="200" value={saturation} 
+                    onChange={(e) => setSaturation(Number(e.target.value))}
+                    onMouseUp={handleSliderChangeEnd}
+                    onTouchEnd={handleSliderChangeEnd}
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                
+                <div className="space-y-4">
+                  <label className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2 justify-between">
+                    <span className="flex items-center gap-2"><Layers size={14} /> Grayscale</span>
+                    <span className="text-indigo-400">{grayscale}%</span>
+                  </label>
+                  <input 
+                    type="range" min="0" max="100" value={grayscale} 
+                    onChange={(e) => setGrayscale(Number(e.target.value))}
+                    onMouseUp={handleSliderChangeEnd}
+                    onTouchEnd={handleSliderChangeEnd}
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* TRANSFORM TAB */}
+            {activeTab === 'transform' && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                   <button 
+                     onClick={() => {
+                        setRotation((r) => r + 90);
+                        addToHistory();
+                     }}
+                     className="flex items-center justify-center gap-2 p-4 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors font-medium text-sm border border-slate-700"
+                   >
+                     <RotateCw size={18} /> Rotate 90°
+                   </button>
+                   <button 
+                     onClick={() => {
+                        setFlipH(!flipH);
+                        addToHistory();
+                     }}
+                     className={`flex items-center justify-center gap-2 p-4 rounded-xl transition-colors font-medium text-sm border ${flipH ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'}`}
+                   >
+                     <FlipHorizontal size={18} /> Flip H
+                   </button>
+                </div>
+
+                <div className="pt-6 border-t border-slate-800">
+                  <h4 className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Crop size={14} /> Crop Ratio
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => handleCrop(1)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">1:1</button>
+                    <button onClick={() => handleCrop(4/3)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">4:3</button>
+                    <button onClick={() => handleCrop(16/9)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">16:9</button>
+                    <button onClick={() => handleCrop(3/4)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">3:4</button>
+                    <button onClick={() => handleCrop(9/16)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">9:16</button>
+                    <button onClick={() => handleCrop(21/9)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-mono text-slate-300 border border-slate-700">21:9</button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* MAGIC TAB */}
+            {activeTab === 'magic' && (
+              <div className="space-y-4">
+                 <div className="p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-xl">
+                   <h4 className="text-indigo-400 text-sm font-bold mb-2 flex items-center gap-2">
+                     <Wand2 size={16} /> AI Actions
+                   </h4>
+                   <p className="text-slate-400 text-xs mb-4">
+                     Uses Gemini AI to modify the image. These actions are destructive but can be undone.
+                   </p>
+                   
+                   <button 
+                     onClick={handleMagicRemoveBg}
+                     disabled={isProcessing}
+                     className="w-full py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                   >
+                     {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
+                     Remove Background
+                   </button>
+                 </div>
+              </div>
+            )}
           </div>
 
-          {/* Actions */}
-          <div className="pt-8 mt-4 border-t border-slate-700 flex gap-3">
+          {/* Footer Actions */}
+          <div className="p-6 border-t border-slate-800 flex gap-3 bg-slate-900">
             <button 
               onClick={onCancel}
-              className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+              className="flex-1 py-3 px-4 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition-colors"
             >
               Cancel
             </button>
             <button 
               onClick={handleSave}
-              className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/50 transition-all flex items-center justify-center gap-2"
+              disabled={isProcessing}
+              className="flex-1 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Check size={18} /> Save
             </button>
