@@ -6,12 +6,11 @@ import { generateImage, editImage, generateVideo, animateImage } from './service
 import { Github, Info } from 'lucide-react';
 
 // Extend window for AI Studio API
+// Define the AIStudio interface expected by the global window declaration.
 declare global {
-  interface Window {
-    aistudio: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    }
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
   }
 }
 
