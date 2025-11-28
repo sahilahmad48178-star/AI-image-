@@ -1,18 +1,20 @@
 import React from 'react';
-import { Download, Share2, Upload, Play } from 'lucide-react';
+import { Download, Upload, Sliders } from 'lucide-react';
 
 interface ImageDisplayProps {
   contentData: string | null;
   isVideo: boolean;
   isLoading: boolean;
   onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onEditInStudio?: () => void;
 }
 
 export const ImageDisplay: React.FC<ImageDisplayProps> = ({ 
   contentData, 
   isVideo,
   isLoading,
-  onImageUpload
+  onImageUpload,
+  onEditInStudio
 }) => {
   const downloadContent = () => {
     if (!contentData) return;
@@ -91,6 +93,17 @@ export const ImageDisplay: React.FC<ImageDisplayProps> = ({
             
             {/* Overlay Actions */}
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+               {/* Studio Edit Button - Only for images */}
+              {!isVideo && onEditInStudio && (
+                <button 
+                  onClick={onEditInStudio}
+                  className="p-3 bg-white/90 hover:bg-indigo-500 hover:text-white text-slate-700 rounded-full shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
+                  title="Edit in Studio"
+                >
+                  <Sliders size={20} />
+                </button>
+              )}
+              
               <button 
                 onClick={downloadContent}
                 className="p-3 bg-white/90 hover:bg-white text-slate-700 rounded-full shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
