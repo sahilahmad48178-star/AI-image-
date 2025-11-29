@@ -5,7 +5,7 @@ import { Dashboard } from './components/Dashboard';
 import { ImageEditor } from './components/ImageEditor';
 import { AspectRatio, AppMode, ImageModel, ImageResolution, GeneratedContent } from './types';
 import { generateImage, editImage, generateVideo, animateImage, upscaleImage } from './services/geminiService';
-import { Github, Info, LayoutGrid, PlusCircle } from 'lucide-react';
+import { Github, Info, LayoutGrid, PlusCircle, Sparkles } from 'lucide-react';
 
 // Extend window for AI Studio API
 declare global {
@@ -40,7 +40,8 @@ const App: React.FC = () => {
   // Auto-switch mode logic based on content availability
   useEffect(() => {
     if (currentContent && !isContentVideo) {
-      // If we have an image, enable image input modes
+      // If we have an image, we could enable image input modes, 
+      // but let's keep user control unless they uploaded explicitly
     }
   }, [currentContent, isContentVideo]);
 
@@ -111,6 +112,7 @@ const App: React.FC = () => {
       }
 
     } catch (err: any) {
+      console.error(err);
       let msg = err.message || "Something went wrong.";
       if (msg.includes("Requested entity was not found")) {
         msg = "API Key issue. Please try selecting your key again.";
@@ -205,37 +207,44 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-indigo-50/50 flex flex-col items-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center py-6 sm:py-10 px-4 sm:px-6 lg:px-8 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       
+      {/* Decorative Background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+         <div className="absolute -top-20 -left-20 w-96 h-96 bg-indigo-100/50 rounded-full blur-3xl opacity-60"></div>
+         <div className="absolute top-1/2 right-0 w-96 h-96 bg-purple-100/50 rounded-full blur-3xl opacity-60"></div>
+         <div className="absolute bottom-0 left-1/4 w-80 h-80 bg-pink-100/40 rounded-full blur-3xl opacity-60"></div>
+      </div>
+
       {/* Navigation Header */}
       <header className="w-full max-w-6xl flex items-center justify-between mb-8 z-20">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-purple-500 rounded-xl shadow-lg flex items-center justify-center text-white font-bold text-xl">
-            N
+          <div className="w-10 h-10 bg-slate-900 rounded-xl shadow-xl flex items-center justify-center text-white">
+            <Sparkles size={20} className="text-indigo-400" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight hidden sm:block">
-            NanoGen
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight hidden sm:block">
+            NanoGen <span className="text-indigo-600">AI</span>
           </h1>
         </div>
 
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+        <div className="flex bg-white/80 backdrop-blur-md p-1.5 rounded-xl shadow-sm border border-slate-200/60">
           <button 
             onClick={() => setView('generator')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${view === 'generator' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${view === 'generator' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
           >
-            <PlusCircle size={16} /> Generator
+            <PlusCircle size={16} /> <span className="hidden sm:inline">Generator</span>
           </button>
           <button 
             onClick={() => setView('dashboard')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${view === 'dashboard' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${view === 'dashboard' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
           >
-            <LayoutGrid size={16} /> Dashboard
+            <LayoutGrid size={16} /> <span className="hidden sm:inline">Dashboard</span>
           </button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="w-full flex flex-col items-center gap-6 relative z-10 flex-1">
+      <main className="w-full flex flex-col items-center gap-8 relative z-10 flex-1 max-w-7xl mx-auto transition-all duration-300">
         
         {isEditingInStudio && currentContent && (
           <ImageEditor 
@@ -255,65 +264,69 @@ const App: React.FC = () => {
             onBack={() => setView('generator')}
           />
         ) : (
-          <>
+          <div className="w-full flex flex-col items-center gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {error && (
-              <div className="w-full max-w-2xl bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-r shadow-md mb-4 flex items-start gap-2 animate-pulse">
+              <div className="w-full max-w-2xl bg-red-50/90 backdrop-blur border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow-sm flex items-start gap-3">
                 <Info className="shrink-0 mt-0.5" size={18} />
-                <p className="text-sm font-medium">{error}</p>
+                <p className="text-sm font-medium leading-tight">{error}</p>
               </div>
             )}
 
-            <div className="text-center mb-6">
-              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 mb-2">
-                What will you create?
+            <div className="text-center space-y-2">
+              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">
+                Create with Speed.
               </h2>
-              <p className="text-slate-500">
-                Generate visuals with Gemini 2.5 & Veo, then refine in Studio.
+              <p className="text-slate-500 text-lg max-w-lg mx-auto">
+                Generate visuals with Gemini 2.5 & Veo, then refine with professional tools.
               </p>
             </div>
 
-            <Controls 
-              prompt={prompt}
-              setPrompt={setPrompt}
-              aspectRatio={aspectRatio}
-              setAspectRatio={setAspectRatio}
-              onGenerate={handleGenerate}
-              isGenerating={isGenerating}
-              mode={mode}
-              setMode={setMode}
-              imageModel={imageModel}
-              setImageModel={setImageModel}
-              imageResolution={imageResolution}
-              setImageResolution={setImageResolution}
-              hasReferenceImage={!!currentContent && !isContentVideo}
-              onClearImage={clearCanvas}
-            />
+            <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div className="w-full">
+                <Controls 
+                  prompt={prompt}
+                  setPrompt={setPrompt}
+                  aspectRatio={aspectRatio}
+                  setAspectRatio={setAspectRatio}
+                  onGenerate={handleGenerate}
+                  isGenerating={isGenerating}
+                  mode={mode}
+                  setMode={setMode}
+                  imageModel={imageModel}
+                  setImageModel={setImageModel}
+                  imageResolution={imageResolution}
+                  setImageResolution={setImageResolution}
+                  hasReferenceImage={!!currentContent && !isContentVideo}
+                  onClearImage={clearCanvas}
+                />
+              </div>
 
-            <ImageDisplay 
-              contentData={currentContent}
-              isVideo={isContentVideo}
-              isLoading={isGenerating}
-              onImageUpload={handleImageUpload}
-              onEditInStudio={!isContentVideo && currentContent ? openStudio : undefined}
-            />
-          </>
+              <div className="w-full sticky top-8">
+                <ImageDisplay 
+                  contentData={currentContent}
+                  isVideo={isContentVideo}
+                  isLoading={isGenerating}
+                  onImageUpload={handleImageUpload}
+                  onEditInStudio={!isContentVideo && currentContent ? openStudio : undefined}
+                />
+              </div>
+            </div>
+          </div>
         )}
 
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 text-center text-slate-400 text-sm flex items-center gap-6">
-        <a href="#" className="hover:text-indigo-500 transition-colors flex items-center gap-1">
-          <Github size={16} />
-          <span>Source</span>
-        </a>
-        <span>&copy; {new Date().getFullYear()} NanoGen AI</span>
+      <footer className="mt-20 pb-8 text-center text-slate-400 text-sm flex flex-col items-center gap-4">
+        <div className="h-px w-full max-w-xs bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+        <div className="flex items-center gap-6">
+          <a href="#" className="hover:text-slate-700 transition-colors flex items-center gap-2">
+            <Github size={16} />
+            <span>Source Code</span>
+          </a>
+          <span>&copy; {new Date().getFullYear()} NanoGen AI</span>
+        </div>
       </footer>
-
-      {/* Decorative Background Blobs */}
-      <div className="fixed top-20 left-10 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob pointer-events-none -z-10"></div>
-      <div className="fixed top-40 right-10 w-72 h-72 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000 pointer-events-none -z-10"></div>
-      <div className="fixed -bottom-8 left-1/2 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000 pointer-events-none -z-10 transform -translate-x-1/2"></div>
     </div>
   );
 };
