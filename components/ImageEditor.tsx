@@ -2,14 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Check, RotateCw, FlipHorizontal, Sun, Contrast, Droplet, 
   Sliders, Undo2, Redo2, Wand2, Crop, Layers, Eraser, Loader2,
-  Palette, Image as ImageIcon
+  Palette, Image as ImageIcon, Zap, Maximize2
 } from 'lucide-react';
+import { ImageResolution } from '../types';
 
 interface ImageEditorProps {
   imageData: string; // Base64
   onSave: (newData: string) => void;
   onCancel: () => void;
   onAiEdit: (currentData: string, prompt: string) => Promise<string>;
+  onAiUpscale: (currentData: string, resolution: ImageResolution) => Promise<string>;
   isProcessing: boolean;
 }
 
@@ -30,6 +32,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   onSave, 
   onCancel,
   onAiEdit,
+  onAiUpscale,
   isProcessing
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -309,6 +312,26 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   };
 
+  const handleMagicUpscale = async (res: ImageResolution) => {
+    const bakedImage = getProcessedData();
+    try {
+      const newImageData = await onAiUpscale(bakedImage, res);
+      
+      setCurrentBaseImage(newImageData);
+      // Reset edits as the new image is fresh
+      setRotation(0);
+      setFlipH(false);
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setGrayscale(0);
+      
+      setTimeout(addToHistory, 50);
+    } catch (e) {
+      console.error("Upscale failed");
+    }
+  };
+
   // Track slider changes for history
   const handleSliderChangeEnd = () => {
     addToHistory();
@@ -501,7 +524,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
 
             {/* MAGIC TAB */}
             {activeTab === 'magic' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                  {/* Quick Actions */}
                  <div className="p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-xl">
                    <h4 className="text-indigo-400 text-sm font-bold mb-2 flex items-center gap-2">
@@ -529,6 +552,34 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Palette size={16} />}
                        Colorize B&W
                      </button>
+                   </div>
+                 </div>
+
+                 {/* Upscaling */}
+                 <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl">
+                   <h4 className="text-emerald-400 text-sm font-bold mb-2 flex items-center gap-2">
+                     <Zap size={16} /> Upscale & Enhance
+                   </h4>
+                   <p className="text-slate-400 text-xs mb-4">
+                     Increase resolution and clarity (Pro model).
+                   </p>
+                   <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleMagicUpscale(ImageResolution.Res2K)}
+                        disabled={isProcessing}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-emerald-900/50 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/50 text-slate-300 rounded-lg font-bold text-xs transition-all disabled:opacity-50 flex flex-col items-center gap-1"
+                      >
+                         <Maximize2 size={14} />
+                         Upscale 2K
+                      </button>
+                      <button 
+                        onClick={() => handleMagicUpscale(ImageResolution.Res4K)}
+                        disabled={isProcessing}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-emerald-900/50 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/50 text-slate-300 rounded-lg font-bold text-xs transition-all disabled:opacity-50 flex flex-col items-center gap-1"
+                      >
+                         <Maximize2 size={14} />
+                         Upscale 4K
+                      </button>
                    </div>
                  </div>
 

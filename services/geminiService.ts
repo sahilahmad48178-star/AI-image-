@@ -106,6 +106,56 @@ export const editImage = async (
 };
 
 /**
+ * Upscales an image using the Pro model to a target resolution.
+ */
+export const upscaleImage = async (
+  base64Image: string,
+  resolution: ImageResolution,
+  mimeType: string = "image/png"
+): Promise<{ data: string; mimeType: string }> => {
+  const ai = getClient();
+  try {
+    const response = await ai.models.generateContent({
+      model: ImageModel.Pro,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: "Upscale this image to high resolution. Enhance details, sharpness, and clarity while maintaining the exact original composition and subject.",
+          },
+        ],
+      },
+      config: {
+        imageConfig: {
+            imageSize: resolution
+        }
+      } as any
+    });
+
+    for (const candidate of response.candidates || []) {
+      for (const part of candidate.content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return {
+            data: part.inlineData.data,
+            mimeType: part.inlineData.mimeType || "image/png",
+          };
+        }
+      }
+    }
+
+    throw new Error("No upscaled image returned.");
+  } catch (error) {
+    console.error("Upscale Error:", error);
+    throw error;
+  }
+};
+
+/**
  * Generates a video from text using Veo.
  */
 export const generateVideo = async (

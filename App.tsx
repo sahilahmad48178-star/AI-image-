@@ -4,7 +4,7 @@ import { ImageDisplay } from './components/ImageDisplay';
 import { Dashboard } from './components/Dashboard';
 import { ImageEditor } from './components/ImageEditor';
 import { AspectRatio, AppMode, ImageModel, ImageResolution, GeneratedContent } from './types';
-import { generateImage, editImage, generateVideo, animateImage } from './services/geminiService';
+import { generateImage, editImage, generateVideo, animateImage, upscaleImage } from './services/geminiService';
 import { Github, Info, LayoutGrid, PlusCircle } from 'lucide-react';
 
 // Extend window for AI Studio API
@@ -172,6 +172,30 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle AI Upscaling
+  const handleAiUpscale = async (currentImageData: string, resolution: ImageResolution): Promise<string> => {
+    setIsEditorProcessing(true);
+    try {
+      // Upscaling uses Pro model, so mandatory key check
+      try {
+         const hasKey = await window.aistudio.hasSelectedApiKey();
+         if (!hasKey) {
+            await window.aistudio.openSelectKey();
+         }
+       } catch (e) {
+         console.warn("AI Studio key selection not available", e);
+       }
+
+      const result = await upscaleImage(currentImageData, resolution);
+      return result.data;
+    } catch (error: any) {
+      console.error("AI Upscale Failed", error);
+      throw error;
+    } finally {
+      setIsEditorProcessing(false);
+    }
+  };
+
   // Dashboard Handlers
   const selectFromHistory = (item: GeneratedContent) => {
     setCurrentContent(item.data);
@@ -219,6 +243,7 @@ const App: React.FC = () => {
             onSave={saveStudioEdit} 
             onCancel={closeStudio}
             onAiEdit={handleAiEdit}
+            onAiUpscale={handleAiUpscale}
             isProcessing={isEditorProcessing}
           />
         )}
