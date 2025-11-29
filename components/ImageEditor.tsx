@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Check, RotateCw, FlipHorizontal, Sun, Contrast, Droplet, 
   Sliders, Undo2, Redo2, Wand2, Crop, Layers, Eraser, Loader2,
-  Palette 
+  Palette, Image as ImageIcon
 } from 'lucide-react';
 
 interface ImageEditorProps {
@@ -42,6 +42,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   const [grayscale, setGrayscale] = useState(0);
   const [rotation, setRotation] = useState(0);
   const [flipH, setFlipH] = useState(false);
+  
+  // Magic State
+  const [replaceBgPrompt, setReplaceBgPrompt] = useState("");
   
   // Base image data (updated after crop or AI edit)
   const [currentBaseImage, setCurrentBaseImage] = useState(imageData);
@@ -280,6 +283,32 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   };
 
+  const handleMagicReplaceBg = async () => {
+    if (!replaceBgPrompt.trim()) return;
+    
+    // Bake current state before sending to AI
+    const bakedImage = getProcessedData();
+    
+    try {
+      const prompt = `Replace the background with ${replaceBgPrompt}. Keep the foreground subject exactly as is.`;
+      const newImageData = await onAiEdit(bakedImage, prompt);
+      
+      // Reset params for the new image
+      setCurrentBaseImage(newImageData);
+      setRotation(0);
+      setFlipH(false);
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setGrayscale(0);
+      
+      setReplaceBgPrompt(""); // Clear prompt
+      setTimeout(addToHistory, 50);
+    } catch (e) {
+      console.error("Replace BG failed");
+    }
+  };
+
   // Track slider changes for history
   const handleSliderChangeEnd = () => {
     addToHistory();
@@ -473,12 +502,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
             {/* MAGIC TAB */}
             {activeTab === 'magic' && (
               <div className="space-y-4">
+                 {/* Quick Actions */}
                  <div className="p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-xl">
                    <h4 className="text-indigo-400 text-sm font-bold mb-2 flex items-center gap-2">
-                     <Wand2 size={16} /> AI Actions
+                     <Wand2 size={16} /> Quick AI Actions
                    </h4>
                    <p className="text-slate-400 text-xs mb-4">
-                     Uses Gemini AI to modify the image. These actions are destructive but can be undone.
+                     One-click enhancements powered by Gemini.
                    </p>
                    
                    <div className="space-y-3">
@@ -488,7 +518,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                        className="w-full py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                      >
                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
-                       Remove Background
+                       Remove Background (White)
                      </button>
 
                      <button 
@@ -498,6 +528,30 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                      >
                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Palette size={16} />}
                        Colorize B&W
+                     </button>
+                   </div>
+                 </div>
+
+                 {/* Replace Background */}
+                 <div className="p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-xl">
+                   <h4 className="text-indigo-400 text-sm font-bold mb-2 flex items-center gap-2">
+                     <ImageIcon size={16} /> Background Replacement
+                   </h4>
+                   <div className="space-y-2">
+                     <input 
+                        type="text" 
+                        value={replaceBgPrompt}
+                        onChange={(e) => setReplaceBgPrompt(e.target.value)}
+                        placeholder="e.g., in a futuristic city, on a beach..."
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all"
+                     />
+                     <button 
+                       onClick={handleMagicReplaceBg}
+                       disabled={isProcessing || !replaceBgPrompt.trim()}
+                       className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                       Generate New Background
                      </button>
                    </div>
                  </div>
