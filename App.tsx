@@ -13,6 +13,9 @@ declare global {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
+  interface Window {
+    aistudio?: AIStudio;
+  }
 }
 
 const App: React.FC = () => {
@@ -61,9 +64,11 @@ const App: React.FC = () => {
     // Veo and Pro models require paid API key selection
     if (imageModel === ImageModel.Pro || mode === AppMode.TextToVideo || mode === AppMode.ImageToVideo) {
        try {
-         const hasKey = await window.aistudio.hasSelectedApiKey();
-         if (!hasKey) {
-            await window.aistudio.openSelectKey();
+         if (window.aistudio) {
+            const hasKey = await window.aistudio.hasSelectedApiKey();
+            if (!hasKey) {
+                await window.aistudio.openSelectKey();
+            }
          }
        } catch (e) {
          console.warn("AI Studio key selection not available", e);
@@ -116,7 +121,7 @@ const App: React.FC = () => {
       let msg = err.message || "Something went wrong.";
       if (msg.includes("Requested entity was not found")) {
         msg = "API Key issue. Please try selecting your key again.";
-        try { await window.aistudio.openSelectKey(); } catch {}
+        try { if(window.aistudio) await window.aistudio.openSelectKey(); } catch {}
       }
       setError(msg);
     } finally {
@@ -180,9 +185,11 @@ const App: React.FC = () => {
     try {
       // Upscaling uses Pro model, so mandatory key check
       try {
-         const hasKey = await window.aistudio.hasSelectedApiKey();
-         if (!hasKey) {
-            await window.aistudio.openSelectKey();
+         if (window.aistudio) {
+            const hasKey = await window.aistudio.hasSelectedApiKey();
+            if (!hasKey) {
+                await window.aistudio.openSelectKey();
+            }
          }
        } catch (e) {
          console.warn("AI Studio key selection not available", e);
