@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Check, RotateCw, FlipHorizontal, Sun, Contrast, Droplet, 
-  Sliders, Undo2, Redo2, Wand2, Crop, Layers, Eraser, Loader2 
+  Sliders, Undo2, Redo2, Wand2, Crop, Layers, Eraser, Loader2,
+  Palette 
 } from 'lucide-react';
 
 interface ImageEditorProps {
@@ -257,6 +258,28 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     }
   };
 
+  const handleMagicColorize = async () => {
+    // Bake current state before sending to AI
+    const bakedImage = getProcessedData();
+    
+    try {
+      const newImageData = await onAiEdit(bakedImage, "Colorize this black and white image. Make the colors look realistic and natural.");
+      
+      // Reset params for the new image
+      setCurrentBaseImage(newImageData);
+      setRotation(0);
+      setFlipH(false);
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setGrayscale(0);
+      
+      setTimeout(addToHistory, 50);
+    } catch (e) {
+      console.error("Colorize failed");
+    }
+  };
+
   // Track slider changes for history
   const handleSliderChangeEnd = () => {
     addToHistory();
@@ -458,14 +481,25 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                      Uses Gemini AI to modify the image. These actions are destructive but can be undone.
                    </p>
                    
-                   <button 
-                     onClick={handleMagicRemoveBg}
-                     disabled={isProcessing}
-                     className="w-full py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                   >
-                     {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
-                     Remove Background
-                   </button>
+                   <div className="space-y-3">
+                     <button 
+                       onClick={handleMagicRemoveBg}
+                       disabled={isProcessing}
+                       className="w-full py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                     >
+                       {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
+                       Remove Background
+                     </button>
+
+                     <button 
+                       onClick={handleMagicColorize}
+                       disabled={isProcessing}
+                       className="w-full py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                     >
+                       {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Palette size={16} />}
+                       Colorize B&W
+                     </button>
+                   </div>
                  </div>
               </div>
             )}
